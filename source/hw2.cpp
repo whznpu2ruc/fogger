@@ -11,6 +11,7 @@
 #include <atomic>
 #include <chrono>
 #include <thread>
+#include <termios.h>
 
 #define ROW 10
 #define COLUMN 50 
@@ -42,6 +43,14 @@ void draw_map(){
 		std::cout<<"\r";
 		puts( map[i] );
 	}
+}
+
+void hide_cursor() {
+    std::cout << "\033[?25l"; // Hide cursor
+}
+
+void show_cursor() {
+    std::cout << "\033[?25h"; // Show cursor
 }
 
 // Determine a keyboard is hit or not. If yes, return 1. If not, return 0. 
@@ -80,6 +89,7 @@ void* forg_control(void *t){
 		/*  Check keyboard hits, to change frog's position or quit the game. */
 		/*  Check game's status  */
 		// check the forg bounds
+			pthread_mutex_lock(&mutex);
 			char key=getchar();
 			if(key=='q'){
 				*(bool*)t=true;
@@ -105,8 +115,10 @@ void* forg_control(void *t){
 				forgOrign=map[frog.x][++frog.y];
 				map[frog.x][frog.y]='0';
 			}
+			pthread_mutex_unlock(&mutex);
 		
 		}
+		pthread_mutex_lock(&mutex);
 		// judge the status of the game
 		if(frog.y<0||frog.x>ROW||forgOrign==' '||frog.y>=COLUMN){
 			*(bool*)t=true;
@@ -117,6 +129,7 @@ void* forg_control(void *t){
 			*(bool*)t=true;
 			Status=WIN;
 		}
+		pthread_mutex_unlock(&mutex);
 		draw_map();
 		}
 		pthread_exit(NULL);
@@ -144,6 +157,7 @@ void *logs_move( void *t ){
 	
 	while(!*(bool*)t){
 	
+	pthread_mutex_lock(&mutex);
 
 	/*  Print the map on the screen  */
 	for(int i=1;i<ROW;i++){
@@ -160,7 +174,14 @@ void *logs_move( void *t ){
 	}
 
 	// notice this line must be added
-	map[frog.x][frog.y]='0';
+	if(map[frog.x][frog.y]==' ')
+	{
+		*(bool*) t=true;
+		Status=LOSE;
+	}else{
+		map[frog.x][frog.y]='0';
+	}
+	pthread_mutex_unlock(&mutex);
 	// draw_map();
 	std::this_thread::sleep_for(std::chrono::milliseconds(1000));
 	}
@@ -168,10 +189,7 @@ void *logs_move( void *t ){
 	pthread_exit(NULL);
 
 }
-
-int main( int argc, char *argv[] ){
-
-	// Initialize the river map and frog's starting position
+void init_map(){
 	memset( map , 0, sizeof( map ) ) ;
 	int i , j ; 
 	for( i = 1; i < ROW; ++i ){	
@@ -187,15 +205,27 @@ int main( int argc, char *argv[] ){
 
 	frog = Node( ROW, (COLUMN-1) / 2 ) ; 
 	map[frog.x][frog.y] = '0' ; 
-
+}
+int main( int argc, char *argv[] ){
+	hide_cursor();
+	struct termios originalTermSettings;
+    tcgetattr(STDIN_FILENO, &originalTermSettings);
+	struct termios termSettings = originalTermSettings;
+	termSettings.c_lflag &= ~(ICANON | ECHO);
+	tcsetattr(STDIN_FILENO, TCSANOW, &termSettings);
+	// Initialize the river map and frog's starting position
+	init_map();
+	std::cout << "\033[" <<ROW+1<<"A";
+	for( int i = 0; i <= ROW; ++i){
+		std::cout<<"\r";
+		std::cout<<"                                                 ";
+	} 
+	std::cout<<"\r";
 	// //Print the map into screen
 	// for( i = 0; i <= ROW; ++i)	
 	// 	puts( map[i] );
 	Status=1;
-
-
 	/*  Create pthreads for wood move and frog control.  */
-
 	pthread_t thread;
 	pthread_t thread2;
     int threadId = 0; // You can use a different thread ID if needed
@@ -211,6 +241,13 @@ int main( int argc, char *argv[] ){
 	pthread_join(thread2,NULL);
 	
 	/*  Display the output for user: win, lose or quit.  */
+	std::cout << "\033[" <<ROW+1<<"A";
+	for( int i = 0; i <= ROW; ++i){
+		std::cout<<"\r";
+		std::cout<<"                                                 ";
+	} 
+	std::cout<<"\r";
+
 	if(Status==WIN){
 		std::cout<<"You win the game!!"<<std::endl;
 	}else if(Status==LOSE){
@@ -218,6 +255,9 @@ int main( int argc, char *argv[] ){
 	}else{
 		std::cout<<"You exit the game."<<std::endl;
 	}
+	tcsetattr(STDIN_FILENO, TCSANOW, &originalTermSettings);
+	show_cursor();
+
 	return 0;
 
 }
