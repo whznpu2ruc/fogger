@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-ggdb3 -c -Wall -std=gnu99
+CFLAGS=-ggdb3 -c -Wall -std=gnu99 -g
 LDFLAGS=-pthread
 SOURCES=httpserver.c libhttp.c util.c async.c
 OBJECTS=$(SOURCES:.c=.o)
